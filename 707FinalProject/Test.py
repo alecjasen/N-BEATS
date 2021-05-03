@@ -1,11 +1,25 @@
 from model import *
 import numpy as np
+import torch as t
 
+hidden_layers = (2*np.ones((4,))).astype(int)
+data = t.tensor(np.arange(0,260)).reshape(1,1,-1).float()
 
-# hidden_layers = 2*np.ones((4,))
-# data = np.arange(0,252)
-# forward_basis = TrendBasisFunction(time_period=20)
-# backward_basis = TrendBasisFunction(time_period=240)
-# block = Block(forward_basis,backward_basis,hidden_layers)
+block = Block("trend",hidden_layers)
+data = data.repeat(2,1,1)
+data.requires_grad = False
+# mini batch size check
+data_train = data[:, :, :-20]
+data_label = data[:, :, -20:]
+nbeats = NBEATS_Modified(num_trend_stacks=1, num_seasonal_stacks=1)
+print(nbeats.parameters())
+optimizer = t.optim.SGD(nbeats.parameters(), lr=0.1)
+for _ in range(1):
+    f = nbeats(data_train)
+    loss = t.mean((f - data_label.squeeze(1))**2)
+    print(loss)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
 
-print(t.__version__)
+print(f)
