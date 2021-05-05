@@ -10,3 +10,6 @@ def MASE(act_y,pred_y,x):
     Num = t.abs(act_y - pred_y)
     Den = t.mean(t.abs(x.data[:, 1:]-x.data[:, :-1]), axis=1)
     return t.mean(t.mean(Num,axis=1)/Den)
+
+def RMSE(act_y,pred_y):
+    return t.mean((act_y-pred_y)**2)

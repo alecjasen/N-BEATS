@@ -6,9 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 data = pd.read_csv("datasets/tourism/monthly_in.csv")
 
-Loss = MASE
+Loss = sMAPE
 trend_hidden_layers = (256*np.ones((4,))).astype(int)
-seasonal_hidden_layers = (2048*np.ones((4,))).astype(int)
+seasonal_hidden_layers = (256*np.ones((4,))).astype(int)
 data = t.tensor(np.arange(0,260)).reshape(1,1,-1).float()
 
 block = Block("trend",hidden_layers)
@@ -22,7 +22,7 @@ optimizer = t.optim.SGD(trend.parameters(), lr=0.0001)
 warmstart_iterations = 1000
 for _ in range(warmstart_iterations):
     f, g = trend(data_train)
-    loss = Loss(data_label.squeeze(1), f, data_train.squeeze(1))
+    loss = Loss(data_label.squeeze(1), f)#, data_train.squeeze(1))
     if np.isnan(loss.detach().numpy()):
         break
     print(loss)
@@ -36,18 +36,18 @@ plt.show()
 
 nbeats = NBEATS_Modified(trend_stacks=[trend],
                          seasonal_hidden_layers=seasonal_hidden_layers,
-                         num_seasonal_stacks=1)
+                         num_seasonal_stacks=1,seasonal_basis_fn="Chebyshev")
 #nbeats = Stack(block_type="trend")
 # for i in nbeats.parameters():
 #     print(i)
-optimizer = t.optim.Adam(nbeats.parameters(), lr=0.001)
+optimizer = t.optim.Adam(nbeats.parameters(), lr=0.0001)
 diff = 1
 prev = 0
 iterations = 0
 loss_values = np.zeros((100,))
 while diff>1e-6:
     f, g = nbeats(data_train)
-    loss = Loss(data_label.squeeze(1),f,data_train.squeeze(1))
+    loss = Loss(data_label.squeeze(1),f)#,data_train.squeeze(1))
     diff = t.abs(loss-prev)
     prev = loss
     if iterations % 50 == 0:
