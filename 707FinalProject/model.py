@@ -71,12 +71,15 @@ class TrendBasisFunction(BasisFunction):
 
 
 class SeasonalBasisFunction(BasisFunction):
-    def __init__(self, function=None, parameters=None, time_period=20):
+    def __init__(self, function=None, parameters=None, time_period=20, forecast_period=20):
         super(SeasonalBasisFunction, self).__init__()
         self.num_parameters = time_period
         self.half_params = int(self.num_parameters/2)
         self.time_period = time_period
-        self.time = t.tensor([i / time_period for i in range(self.time_period)])
+        if function=="Chebyshev":
+            self.time = t.tensor([i / time_period for i in range(self.time_period)])
+        else:
+            self.time = t.tensor([i / forecast_period for i in range(self.time_period)])
         self.time.requires_grad = False
         if function is None:
             def fourier_sum(parameter_array):
@@ -113,7 +116,7 @@ class Stack(nn.Module):
     def forward(self, x):
         residual = x
         backcast = 0
-        forecasts = t.zeros(1,1,self.block.forecast_basis_function.time_period)
+        forecasts = t.zeros(1, self.block.forecast_basis_function.time_period)
         for _ in range(self.num_blocks):
             residual = residual - backcast
             #print(residual)

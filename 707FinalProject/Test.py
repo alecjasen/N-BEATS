@@ -10,10 +10,16 @@ Loss = sMAPE
 trend_hidden_layers = (256*np.ones((4,))).astype(int)
 seasonal_hidden_layers = (256*np.ones((4,))).astype(int)
 data = t.tensor(np.arange(0,260)).reshape(1,1,-1).float()
+trend = Stack(block_type='trend',block_hidden_layers=trend_hidden_layers)
 
-block = Block("trend",hidden_layers)
-data = data.repeat(2,1,1)
+data2 = t.tensor(np.arange(0,260)+np.sin((np.pi/5)*np.arange(0,260))).reshape(1,1,-1).float()
+data2 = t.hstack((data,data2)).reshape(2,1,260)
+data = data.repeat(2, 1, 1)
 data.requires_grad = False
+
+#data2 = data2.repeat(2, 1, 1)
+data2.requires_grad = False
+
 # mini batch size check
 data_train = data2[:, :, :-20]
 data_label = data2[:, :, -20:]
