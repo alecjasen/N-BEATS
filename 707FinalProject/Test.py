@@ -36,7 +36,7 @@ plt.show()
 
 nbeats = NBEATS_Modified(trend_stacks=[trend],
                          seasonal_hidden_layers=seasonal_hidden_layers,
-                         num_seasonal_stacks=1,seasonal_basis_fn="Chebyshev")
+                         num_seasonal_stacks=1,seasonal_basis_fn=None)
 #nbeats = Stack(block_type="trend")
 # for i in nbeats.parameters():
 #     print(i)
@@ -64,9 +64,10 @@ while diff>1e-6:
         plt.plot(nbeats.seasonal_predictions.detach().numpy()[0,:])
         plt.title(f'Seasonal, Iterations: {iterations}')
         plt.show()
+        break
 print(f)
 print(iterations)
-plt.plot(Loss)
+plt.plot(loss_values)
 plt.title('Loss at every 50th iteration')
 plt.show()
 
