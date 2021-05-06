@@ -1,5 +1,4 @@
 from model import *
-import numpy as np
 from losses import *
 from SyntheticDatasets import *
 from Visualization import *
@@ -38,7 +37,7 @@ lr_decay_step = warmstart_iterations//6
 for i in range(warmstart_iterations):
     data_train, data_label = next(sampler)
     f, g = trend(data_train)
-    loss = Loss(data_label.squeeze(1), f)#, data_train.squeeze(1))
+    loss = Loss(data_label.squeeze(1), f)
     if np.isnan(loss.detach().numpy()):
         break
     print(loss)
@@ -62,8 +61,9 @@ print(trend.total_param_forecast.detach().numpy())
 # print(trend.block.backcast_basis_function.parameters.detach().numpy())
 nbeats = NBEATS_Modified(trend_stacks=[trend],
                          seasonal_hidden_layers=seasonal_hidden_layers,
-                         num_seasonal_stacks=1,seasonal_basis_fn=None)
-#nbeats = Stack(block_type="trend")
+                         num_seasonal_stacks=1,
+                         seasonal_basis_fn=None)
+# nbeats = Stack(block_type="trend")
 # for i in nbeats.parameters():
 #     print(i)
 optimizer = t.optim.Adam(nbeats.parameters(), lr=learning_rate)
@@ -75,7 +75,7 @@ lr_decay_step = 1000
 while diff > 1e-6:
     data_train, data_label = next(sampler)
     f, g = nbeats(data_train)
-    loss = Loss(data_label.squeeze(1),f)#,data_train.squeeze(1))
+    loss = Loss(data_label.squeeze(1), f)
     diff = t.abs(loss-prev)
     prev = loss
     if iterations % 50 == 0:
@@ -117,5 +117,3 @@ print(iterations)
 plt.plot(loss_values)
 plt.title('Loss at every 50th iteration')
 plt.show()
-
-

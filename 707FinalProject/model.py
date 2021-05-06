@@ -10,7 +10,8 @@ import torch as t
 # Linear layer outputting parameters of forecast; linear layer outputting parameter of backcast
 # weights are shared with other blocks in stack
 class Block(nn.Module):
-    def __init__(self, block_type="trend", hidden_nodes=(2*np.ones((4,))).astype(int),seasonal_basis_fn=None):
+    def __init__(self, block_type="trend", hidden_nodes=(2*np.ones((4,))).astype(int),
+                 trend_basis_fn=None, seasonal_basis_fn=None, num_parameters=4):
         super(Block, self).__init__()
         self.filtersizes = [1,5,20,50,200]
         self.CNNLayers = nn.ModuleList([nn.Conv1d(1,1,self.filtersizes[i]) for i in range(len(self.filtersizes))])
@@ -20,8 +21,10 @@ class Block(nn.Module):
                               nn.Linear(hidden_nodes[2],hidden_nodes[3])])
         self.ReLULayers = nn.ModuleList([nn.ReLU(),nn.ReLU(), nn.ReLU(), nn.ReLU()])
         if block_type == "trend":
-            self.forecast_basis_function = TrendBasisFunction(time_period=20)
-            self.backcast_basis_function = TrendBasisFunction(time_period=240)
+            self.forecast_basis_function = TrendBasisFunction(time_period=20, num_parameters=num_parameters,
+                                                              function=trend_basis_fn)
+            self.backcast_basis_function = TrendBasisFunction(time_period=240, num_parameters=num_parameters,
+                                                              function=trend_basis_fn)
         else:
             self.forecast_basis_function = SeasonalBasisFunction(time_period=20, forecast_period=20,function=seasonal_basis_fn)
             self.backcast_basis_function = SeasonalBasisFunction(time_period=240, forecast_period=20,function=seasonal_basis_fn)
@@ -163,6 +166,7 @@ class NBEATS_Modified(nn.Module):
         self.seasonal_stacks = nn.ModuleList([Stack(block_type="seasonal", block_hidden_layers=seasonal_hidden_layers,seasonal_basis_fn = seasonal_basis_fn) for _ in range(num_seasonal_stacks)])
         self.trend_predictions = t.zeros(1, self.trend_stacks[0].block.forecast_basis_function.time_period)
         self.seasonal_predictions = t.zeros(1, self.seasonal_stacks[0].block.forecast_basis_function.time_period)
+
     def forward(self, x):
         backcast = x
         residual = 0
