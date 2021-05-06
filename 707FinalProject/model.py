@@ -14,25 +14,26 @@ class Block(nn.Module):
                  trend_basis_fn=None, seasonal_basis_fn=None, num_parameters=4):
         super(Block, self).__init__()
         self.filtersizes = [1,5,20,50,200]
-        self.CNNLayers = nn.ModuleList([nn.Conv1d(1,1,self.filtersizes[i]) for i in range(len(self.filtersizes))])
-        self.linear_processing_layers = nn.ModuleList([nn.Linear(929,hidden_nodes[0]),
-                              nn.Linear(hidden_nodes[0],hidden_nodes[1]),
-                              nn.Linear(hidden_nodes[1],hidden_nodes[2]),
-                              nn.Linear(hidden_nodes[2],hidden_nodes[3])])
-        self.ReLULayers = nn.ModuleList([nn.ReLU(),nn.ReLU(), nn.ReLU(), nn.ReLU()])
+        self.CNNLayers = nn.ModuleList([nn.Conv1d(1, 1, self.filtersizes[i]) for i in range(len(self.filtersizes))])
+        self.linear_processing_layers = nn.ModuleList([nn.Linear(929, hidden_nodes[0]),
+                              nn.Linear(hidden_nodes[0], hidden_nodes[1]),
+                              nn.Linear(hidden_nodes[1], hidden_nodes[2]),
+                              nn.Linear(hidden_nodes[2], hidden_nodes[3])])
+        self.ReLULayers = nn.ModuleList([nn.LeakyReLU(),nn.LeakyReLU(), nn.LeakyReLU(), nn.LeakyReLU()])
         if block_type == "trend":
             self.forecast_basis_function = TrendBasisFunction(time_period=20, num_parameters=num_parameters,
                                                               function=trend_basis_fn)
             self.backcast_basis_function = TrendBasisFunction(time_period=240, num_parameters=num_parameters,
                                                               function=trend_basis_fn)
         else:
-            self.forecast_basis_function = SeasonalBasisFunction(time_period=20, forecast_period=20,function=seasonal_basis_fn)
-            self.backcast_basis_function = SeasonalBasisFunction(time_period=240, forecast_period=20,function=seasonal_basis_fn)
+            self.forecast_basis_function = SeasonalBasisFunction(time_period=20, forecast_period=20,
+                                                                 function=seasonal_basis_fn)
+            self.backcast_basis_function = SeasonalBasisFunction(time_period=240, forecast_period=20,
+                                                                 function=seasonal_basis_fn)
         self.linear_forecast_parameter = nn.Linear(hidden_nodes[3], self.forecast_basis_function.num_parameters)
         self.linear_backcast_parameter = nn.Linear(hidden_nodes[3], self.backcast_basis_function.num_parameters)
 
-
-    def forward(self,data):
+    def forward(self, data):
         pre_processing = [conv_layer(data).squeeze(1) for conv_layer in self.CNNLayers]
         inp = t.cat(pre_processing, dim=-1)
         for i in range(len(self.linear_processing_layers)):
@@ -106,11 +107,11 @@ class SeasonalBasisFunction(BasisFunction):
             self.function = fourier_sum
         elif function=="Chebyshev":
             def Generate_Chebyshev(parameter_array):
-                polyn = t.ones((self.time.size()[0],parameter_array.size()[1]))
+                polyn = t.ones((self.time.size()[0], parameter_array.size()[1]))
                 polyn.requires_grad=False
                 polyn[:, 1] = self.time.T
                 for j in range(2,parameter_array.size()[1]):
-                    polyn[:,j] = 2*self.time*polyn[:,j-1]- polyn[:,j-2]
+                    polyn[:, j] = 2*self.time*polyn[:, j-1] - polyn[:, j-2]
                 series_param = parameter_array.reshape(parameter_array.size(0), -1, 1)
                 return t.matmul(polyn, series_param).squeeze()
             self.function = Generate_Chebyshev
