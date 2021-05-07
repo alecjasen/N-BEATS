@@ -62,12 +62,8 @@ class NBeats(t.nn.Module):
     def __init__(self, blocks: t.nn.ModuleList):
         super().__init__()
         self.blocks = blocks
-        self.trend_predictions = []
-        self.seasonal_predictions=[]
 
     def forward(self, x: t.Tensor, input_mask: t.Tensor) -> t.Tensor:
-        self.trend_predictions = t.zeros((x.size(0), 20))
-        self.seasonal_predictions = t.zeros((x.size(0),20 ))
         residuals = x.flip(dims=(1,))
         input_mask = input_mask.flip(dims=(1,))
         forecast = x[:, -1:]
@@ -75,10 +71,6 @@ class NBeats(t.nn.Module):
             backcast, block_forecast = block(residuals)
             residuals = (residuals - backcast) * input_mask
             forecast = forecast + block_forecast
-            if i < 3:
-                self.trend_predictions = forecast
-            else:
-                self.seasonal_predictions += block_forecast
         return forecast
 
 

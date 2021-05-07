@@ -17,9 +17,9 @@ Timeseries sampler
 """
 import numpy as np
 
-import gin
+#import gin
 
-@gin.configurable
+#@gin.configurable
 class TimeseriesSampler:
     def __init__(self,
                  timeseries: np.ndarray,

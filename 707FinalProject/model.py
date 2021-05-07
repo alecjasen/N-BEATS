@@ -13,13 +13,13 @@ class Block(nn.Module):
     def __init__(self, block_type="trend", hidden_nodes=(2*np.ones((4,))).astype(int),
                  trend_basis_fn=None, seasonal_basis_fn=None, num_parameters=4):
         super(Block, self).__init__()
-        self.filtersizes = [1,5,20,50,200]
+        self.filtersizes = [5,20,50,200]
         self.CNNLayers = nn.ModuleList([nn.Conv1d(1, 1, self.filtersizes[i]) for i in range(len(self.filtersizes))])
-        self.linear_processing_layers = nn.ModuleList([nn.Linear(929, hidden_nodes[0]),
+        self.linear_processing_layers = nn.ModuleList([nn.Linear(929,hidden_nodes[0]),
                               nn.Linear(hidden_nodes[0], hidden_nodes[1]),
                               nn.Linear(hidden_nodes[1], hidden_nodes[2]),
                               nn.Linear(hidden_nodes[2], hidden_nodes[3])])
-        self.ReLULayers = nn.ModuleList([nn.LeakyReLU(),nn.LeakyReLU(), nn.LeakyReLU(), nn.LeakyReLU()])
+        self.ReLULayers = nn.ModuleList([nn.ReLU(),nn.ReLU(), nn.ReLU(), nn.ReLU()])
         if block_type == "trend":
             self.forecast_basis_function = TrendBasisFunction(time_period=20, num_parameters=num_parameters,
                                                               function=trend_basis_fn)
@@ -34,7 +34,7 @@ class Block(nn.Module):
         self.linear_backcast_parameter = nn.Linear(hidden_nodes[3], self.backcast_basis_function.num_parameters)
 
     def forward(self, data):
-        pre_processing = [conv_layer(data).squeeze(1) for conv_layer in self.CNNLayers]
+        pre_processing = [data.squeeze(1)]+[conv_layer(data).squeeze(1) for conv_layer in self.CNNLayers]
         inp = t.cat(pre_processing, dim=-1)
         for i in range(len(self.linear_processing_layers)):
             inp = self.ReLULayers[i](self.linear_processing_layers[i](inp))
@@ -101,8 +101,8 @@ class SeasonalBasisFunction(BasisFunction):
                 sine_portion = t.vstack([t.sin(2*np.pi*i*self.time) for i in range(self.half_params)]).T
                 cosine_parameter_array = parameter_array[:, :self.half_params].reshape(parameter_array.size(0), -1, 1)
                 sine_parameter_array = parameter_array[:, self.half_params:].reshape(parameter_array.size(0), -1, 1)
-                cosine_sum = t.matmul(cosine_portion, cosine_parameter_array).squeeze()
-                sine_sum = t.matmul(sine_portion, sine_parameter_array).squeeze()
+                cosine_sum = t.matmul(cosine_portion, cosine_parameter_array).squeeze(-1)
+                sine_sum = t.matmul(sine_portion, sine_parameter_array).squeeze(-1)
                 return cosine_sum+sine_sum
             self.function = fourier_sum
         elif function=="Chebyshev":
@@ -135,10 +135,12 @@ class Stack(nn.Module):
             self.trend_num_param = trend_num_parameters
 
     def forward(self, x):
+
         residual = x
         backcast = 0
         forecasts = t.zeros(1, self.block.forecast_basis_function.time_period)
         if self.block_type=="trend":
+            forecasts = x.squeeze(1)[:, -1:]
             self.total_param_forecast = t.zeros((x.size(0),self.trend_num_param))
         for _ in range(self.num_blocks):
             residual = residual - backcast
@@ -151,7 +153,7 @@ class Stack(nn.Module):
         return forecasts, backcast
 
 class NBEATS_Modified(nn.Module):
-    def __init__(self,trend_stacks=None, num_trend_stacks=None, num_seasonal_stacks=1, trend_hidden_layers=None, seasonal_hidden_layers=None, trend_basis_fn = None ,seasonal_basis_fn = None):
+    def __init__(self,trend_stacks=None, num_trend_stacks=None, num_seasonal_stacks=1,num_seasonal_blocks=3, trend_hidden_layers=None, seasonal_hidden_layers=None, trend_basis_fn = None ,seasonal_basis_fn = None):
         super(NBEATS_Modified, self).__init__()
         # could lift this requirement, but from an interpretability POV, it makes sense to require
         assert(trend_stacks is not None or (num_trend_stacks is not None and num_trend_stacks == num_seasonal_stacks))
@@ -164,25 +166,25 @@ class NBEATS_Modified(nn.Module):
         else:
             assert(num_trend_stacks == num_seasonal_stacks)
             self.trend_stacks = nn.ModuleList([Stack(block_type="trend", block_hidden_layers=trend_hidden_layers,trend_basis_fn=trend_basis_fn) for _ in range(num_trend_stacks)])
-        self.seasonal_stacks = nn.ModuleList([Stack(block_type="seasonal", block_hidden_layers=seasonal_hidden_layers,seasonal_basis_fn = seasonal_basis_fn) for _ in range(num_seasonal_stacks)])
+        self.seasonal_stacks = nn.ModuleList([Stack(block_type="seasonal",num_blocks=num_seasonal_blocks, block_hidden_layers=seasonal_hidden_layers,seasonal_basis_fn = seasonal_basis_fn) for _ in range(num_seasonal_stacks)])
         self.trend_predictions = t.zeros(1, self.trend_stacks[0].block.forecast_basis_function.time_period)
         self.seasonal_predictions = t.zeros(1, self.seasonal_stacks[0].block.forecast_basis_function.time_period)
 
     def forward(self, x):
-        backcast = x
-        residual = 0
+        backcast = 0
+        residual = x.flip(dims=(1,))
         forecasts = t.zeros(1, self.trend_stacks[0].block.forecast_basis_function.time_period)
         # alternate:
         for i in range(len(self.trend_stacks)):
-            residual = backcast - residual
             #print(residual)
             #print(residual.shape)
             forecast, backcast = self.trend_stacks[i](residual)
             #print(forecast.shape)
             forecasts = forecasts + forecast
             self.trend_predictions = forecast
-            residual = backcast - residual
+            residual = residual-backcast
             forecast, backcast = self.seasonal_stacks[i](residual)
+            residual = residual - backcast
             self.seasonal_predictions = forecast
             #print(forecast.shape)
             forecasts = forecasts + forecast

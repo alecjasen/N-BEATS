@@ -33,7 +33,7 @@ def to_tensor(array: np.ndarray) -> t.Tensor:
     :param array: Numpy array to convert.
     :return: PyTorch tensor on default device.
     """
-    return t.tensor(array, dtype=t.float32).to(default_device())
+    return t.tensor(array, dtype=t.float32)#.to(default_device())
 
 def divide_no_nan(a, b):
     """

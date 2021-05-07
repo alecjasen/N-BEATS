@@ -31,15 +31,14 @@ trend = Stack(num_blocks=3, block_type='trend',
 data2, trend2, seasonal2 = Make_Dataset()
 data2.requires_grad = False
 sampler = iter(Data_Sampler(data2[:,:-20], batch_size=64))
-optimizer = t.optim.Adam(trend.parameters(), lr=learning_rate)
-warmstart_iterations = 1000
-lr_decay_step = warmstart_iterations//6
+optimizer = t.optim.AdamW(trend.parameters(), lr=learning_rate)
+warmstart_iterations = 500
+lr_decay_step = warmstart_iterations//3
 for i in range(warmstart_iterations):
+
     data_train, data_label = next(sampler)
     f, g = trend(data_train)
     loss = Loss(data_label.squeeze(1), f)
-    if np.isnan(loss.detach().numpy()):
-        break
     print(loss)
     optimizer.zero_grad()
     loss.backward()
@@ -51,10 +50,10 @@ with t.no_grad():
     f, g = trend(data2[:, -260:-20][:, None, :])
     loss = Loss(data2[:,-20:], f)
 plots_array_forecast = make_plots(f.detach().numpy(), trend2[:, -20:].detach().numpy())
-# plots_array_backcast = make_plots(g.squeeze(1).detach().numpy(), trend2[:, :-20].detach().numpy())
+plots_array_backcast = make_plots(g.squeeze(1).detach().numpy(), trend2[:, -260:-20].detach().numpy())
 img_tile(plots_array_forecast, warmstart_iterations, 'Forecast Trend Warm Start')
-# img_tile(plots_array_backcast, 1000, f'Backcast Trend Warm Start, Iterations: {warmstart_iterations}')
-#print(f"RMSE Loss: {loss}")
+img_tile(plots_array_backcast, warmstart_iterations, 'Backcast Trend Warm Start')
+print(f"RMSE Loss: {loss}")
 print(f"sMAPE Loss:{sMAPE(data2[:,-20:], f)}")
 print(f"vector validation loss: {sMAPE_vec(data2[:, -20:], f)}")
 print(trend.total_param_forecast.detach().numpy())
@@ -62,16 +61,17 @@ print(trend.total_param_forecast.detach().numpy())
 nbeats = NBEATS_Modified(trend_stacks=[trend],
                          seasonal_hidden_layers=seasonal_hidden_layers,
                          num_seasonal_stacks=1,
+                         num_seasonal_blocks=3,
                          seasonal_basis_fn=None)
 # nbeats = Stack(block_type="trend")
 # for i in nbeats.parameters():
 #     print(i)
-optimizer = t.optim.Adam(nbeats.parameters(), lr=learning_rate)
+optimizer = t.optim.AdamW(nbeats.parameters(), lr=learning_rate)
 diff = 1
 prev = 0
 iterations = 0
 loss_values = np.zeros((1000,))
-lr_decay_step = 1000
+lr_decay_step = 2000
 while diff > 1e-6:
     data_train, data_label = next(sampler)
     f, g = nbeats(data_train)
@@ -83,7 +83,7 @@ while diff > 1e-6:
         print(loss)
     optimizer.zero_grad()
     loss.backward()
-    t.nn.utils.clip_grad_norm_(trend.parameters(), 1.0)
+    t.nn.utils.clip_grad_norm_(nbeats.parameters(), 1.0)
     optimizer.step()
     for param_group in optimizer.param_groups:
         param_group["lr"] = learning_rate * 0.5 ** (iterations // lr_decay_step)
