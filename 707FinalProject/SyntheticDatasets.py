@@ -14,7 +14,7 @@ def Make_Dataset():
     dataset = []
     for i in range(trend.shape[0]):
         for j in range(seasonal_sine.shape[0]):
-            dataset.append(trend[i] + seasonal_sine[j])
+            dataset.append(trend[i] + .5*seasonal_sine[j])
     dataset = t.vstack(dataset)
     dataset.requires_grad = False
     trend1 = trend.repeat_interleave(seasonal_sine.shape[0], dim=0)

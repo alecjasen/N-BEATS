@@ -44,6 +44,7 @@ class Block(nn.Module):
         backcast = self.backcast_basis_function(backcast_param)
         return forecast, backcast
 
+
 class BasisFunction(nn.Module):
     def __init__(self, function=None, num_parameters=None, parameters=None, time_period=None):
         super(BasisFunction, self).__init__()
@@ -119,6 +120,7 @@ class SeasonalBasisFunction(BasisFunction):
             self.function = function
         self.parameters = parameters
 
+
 class Stack(nn.Module):
     def __init__(self, num_blocks=3, block_type="trend", block_hidden_layers=None,
                  seasonal_basis_fn = None,trend_basis_fn=None, trend_num_parameters=4):
@@ -151,6 +153,7 @@ class Stack(nn.Module):
             backcast = backcast.reshape(backcast.size(0), 1, backcast.size(1))
             forecasts = forecasts + forecast
         return forecasts, backcast
+
 
 class NBEATS_Modified(nn.Module):
     def __init__(self,trend_stacks=None, num_trend_stacks=None, num_seasonal_stacks=1,num_seasonal_blocks=3, trend_hidden_layers=None, seasonal_hidden_layers=None, trend_basis_fn = None ,seasonal_basis_fn = None):
@@ -189,3 +192,55 @@ class NBEATS_Modified(nn.Module):
             #print(forecast.shape)
             forecasts = forecasts + forecast
         return forecasts, backcast
+
+
+class NBEATS_Modified_Fft(nn.Module):
+    def __init__(self,trend_stacks=None, num_trend_stacks=None, num_seasonal_stacks=1, trend_hidden_layers=None, seasonal_hidden_layers=None, trend_basis_fn = None ,seasonal_basis_fn = None):
+        super(NBEATS_Modified_Fft, self).__init__()
+        # could lift this requirement, but from an interpretability POV, it makes sense to require
+        assert(trend_stacks is not None or (num_trend_stacks is not None and num_trend_stacks == num_seasonal_stacks))
+        if trend_hidden_layers is None:
+            trend_hidden_layers = (2 * np.ones((4,))).astype(int)
+        if seasonal_hidden_layers is None:
+            seasonal_hidden_layers = (2 * np.ones((4,))).astype(int)
+        if trend_stacks is not None:
+            self.trend_stacks = nn.ModuleList(trend_stacks)
+        else:
+            assert(num_trend_stacks == num_seasonal_stacks)
+            self.trend_stacks = nn.ModuleList([Stack(block_type="trend", block_hidden_layers=trend_hidden_layers,
+                                                     trend_basis_fn=trend_basis_fn) for _ in range(num_trend_stacks)])
+        self.seasonal_stacks = nn.ModuleList([Stack(block_type="seasonal", block_hidden_layers=seasonal_hidden_layers,
+                                                    seasonal_basis_fn=seasonal_basis_fn) for _ in range(num_seasonal_stacks)])
+        self.trend_predictions = t.zeros(1, self.trend_stacks[0].block.forecast_basis_function.time_period)
+        self.seasonal_predictions = t.zeros(1, self.seasonal_stacks[0].block.forecast_basis_function.time_period)
+
+    def forward(self, x):
+        backcast = 0
+        residual = x
+        forecasts = t.zeros(1, self.trend_stacks[0].block.forecast_basis_function.time_period)
+        # alternate:
+        for i in range(len(self.trend_stacks)):
+            residual = residual - backcast
+            #print(residual)
+            #print(residual.shape)
+            forecast, backcast = self.trend_stacks[i](residual)
+            #print(forecast.shape)
+            forecasts = forecasts + forecast
+            self.trend_predictions = forecast
+            residual = residual - backcast
+            residual = t.fft.rfft(residual)
+            residual = t.cat([residual.real, residual.imag], dim=2)
+            forecast, backcast = self.seasonal_stacks[i](residual)
+            forecast_real = forecast[:, :int(forecast.shape[-1]/2)]
+            forecast_complex = forecast[:, int(forecast.shape[-1] / 2):]
+            forecast = t.view_as_complex(t.dstack([forecast_real, forecast_complex]))
+            forecast = t.fft.irfft(forecast)
+            backcast_real = backcast[:, :, :int(backcast.shape[-1] / 2)][:, :, :, None]
+            backcast_complex = backcast[:, :, int(backcast.shape[-1] / 2):][:, :, :, None]
+            backcast = t.view_as_complex(t.stack([backcast_real, backcast_complex], dim=3).squeeze(4))
+            backcast = t.fft.irfft(backcast)
+            self.seasonal_predictions = forecast
+            #print(forecast.shape)
+            forecasts = forecasts + forecast
+        return forecasts, backcast
+
